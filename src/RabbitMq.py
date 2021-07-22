@@ -19,7 +19,7 @@ from robot.libraries.BuiltIn import BuiltIn
 from socket import gaierror, error
 
 RabbitMqMessage = Union[Tuple[Dict[str, Any], Dict[str, Any], str], Tuple[None, None, None]]  # noqa: 993
-
+pika_logger = logging.getLogger('pika') 
 
 class RequestConnection(object):
     """This class contains settings to connect to RabbitMQ via HTTP."""
@@ -335,7 +335,7 @@ class RabbitMq(object):
         *Returns:*\n
             Channel.
         """
-        if self._channel is None:
+        if self._channel is None or self._channel.is_closed:
             self._channel = self.amqp_connection.channel()
         if self.amqp_connection.blocked:
             raise Exception('Connection is blocked')
@@ -444,11 +444,16 @@ class RabbitMq(object):
         *Returns:*\n
         True if queue exists otherwise False
         """
+        exist = False
         try:
+            pika_logger.propagate = False
             self._get_channel().queue_declare(queue=name, passive=True)
-            return True
+            exist = True
         except ChannelClosed:
-            return False
+            pass
+        finally:
+            pika_logger.propagate = True
+            return exist
 
     def binding_exchange_with_queue(self, exchange_name: str, queue_name: str, routing_key: str = '',
                                     arguments: Dict[str, Any] = None) -> None:
